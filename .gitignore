@@ -1,0 +1,6 @@
+run/*.json
+src/*.o
+bin/*
+src/*.txt
+python/helpers/__pycache__/*
+python/productor/__pycache__/*

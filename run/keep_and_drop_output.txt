@@ -17,3 +17,7 @@ keep Muon_*
 keep Electron_*
 keep FatJet_*
 keep Jet_*
+# Modules
+# keep n_*
+# keep ak4_*
+keep pass*

@@ -40,7 +40,11 @@ def main(args):
         except json.JSONDecodeError as e:
             print(f"[ERROR] Failed to load quickCut.json: {e}")
             return
-        
+    modules = []
+    for mod, names in md['imports']:
+        print(mod, names)
+        modules.append(f'-I {mod} {names}')
+
     input_path = args.inputdir
     output_dir = args.output
     year = args.year
@@ -52,6 +56,8 @@ def main(args):
             os.makedirs(output_dir)
             os.makedirs(output_data_dir)
             os.makedirs(output_mc_dir)
+            os.makedirs(os.path.join(output_data_dir,"result"))
+            os.makedirs(os.path.join(output_mc_dir,"result"))
         except Exception as e:
             print(f"[ERROR] Could not create output directories: {e}")
             return
@@ -82,7 +88,7 @@ def main(args):
     print(f"[INFO] Using cut: {cut}")
 
     for input_file in input_files:
-        cmd = "nano_postproc.py -c '{cut}' --bi {branchsel} --bo {outputbranchsel} -z {compression} {jsonInput} --first-entry {firstEntry} {outputDir} {inputFiles}".format(
+        cmd = "nano_postproc.py -c '{cut}' --bi {branchsel} --bo {outputbranchsel} -z {compression} {jsonInput} --first-entry {firstEntry} {outputDir} {inputFiles} {modules}".format(
             outputDir=output_data_dir if args.type == 'Data' else output_mc_dir,
             inputFiles=input_file,
             cut=cut,
@@ -91,6 +97,7 @@ def main(args):
             compression=md.get('compression', 'LZMA:9'),
             jsonInput='-J %s' % json_input if json_input else '',
             firstEntry=md.get('firstEntry', 0),
+            modules=' '.join(modules),
         )
         print(f"[INFO] Processing file: {input_file}")
         p = subprocess.Popen(cmd, shell=True)
@@ -99,7 +106,7 @@ def main(args):
             print(f"[ERROR] Failed to process file {input_file}!")
             continue
     # hadd files
-    final_output = os.path.join(output_data_dir if args.type == 'Data' else output_mc_dir, "result", f"processed_{year}_{args.type}_{args.choose_cut}.root")
+    final_output = os.path.join(output_data_dir if args.type == 'Data' else output_mc_dir,"result" ,f"processed_{year}_{args.type}_{args.choose_cut}.root")
     hadd_cmd = f"haddnano.py  {final_output} {os.path.join(output_data_dir if args.type == 'Data' else output_mc_dir, '*.root')}"
     print(f"[INFO] Merging files into {final_output}")
     try:        
@@ -114,8 +121,11 @@ def main(args):
         print(f"[ERROR] Merging failed: {e}")
     print(f"[INFO] Processing completed. Output files are in {output_dir}")
 
-
 def create_metadata(args):
+        modules = [[
+            "PhysicsTools.QuickProcess.productor.quickProducer",
+            "quickFromConfig"
+        ],]
         metadata = {
             'cut' : _base_cut(args.choose_cut),
             'branchsel_in': 'keep_and_drop_input.txt',
@@ -123,6 +133,7 @@ def create_metadata(args):
             'compression': 'LZMA:9',
             'year': args.year,
             'type': args.type,
+            'imports': modules
         }
         # save metadata to JSON file
         metadata_path = args.metadata
