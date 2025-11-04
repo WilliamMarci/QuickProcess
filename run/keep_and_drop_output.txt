@@ -1,0 +1,19 @@
+# this is a comment
+dropmatch n?[A-Z][a-zA-Z0-9]{1,}.+
+dropmatch n?boostedTau_.+
+drop fixedGridRho*
+drop btagWeight_*
+drop bunchCrossing
+# event info
+keep run
+keep luminosityBlock
+keep event
+keep PV_npvs
+# objects
+keep genWeight
+keep *LHEScaleWeight
+keep *PSWeight
+keep Muon_*
+keep Electron_*
+keep FatJet_*
+keep Jet_*
