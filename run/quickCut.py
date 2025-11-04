@@ -1,8 +1,9 @@
+#!/usr/bin/env python3
 import subprocess
 import os
 import json
 
-def _base_cut():
+def _base_cut(choose='1L'):
     cut_dict = {
         'ele_cut': 'Electron_pt>15 && abs(Electron_eta)<2.4 && Electron_mvaFall17V2Iso_WP90',
         # 'ele_cut': 'Electron_pt>15 && abs(Electron_eta)<2.5 && Electron_mvaFall17V2Iso_WP90'
@@ -11,14 +12,19 @@ def _base_cut():
         # 'mu_cut': 'Muon_pt>10 && abs(Muon_eta)<2.4', #&& Muon_tightId && Muon_pfRelIso04_all<0.25',
         'tight_ele_cut': 'Electron_pt>25 && Electron_mvaFall17V2Iso_WP80',
         'tight_mu_cut': 'Muon_pt>20 && Muon_pfRelIso04_all<0.15',
+        'loose_ele_cut': 'Electron_pt>15 && abs(Electron_eta)<2.4 && Electron_mvaFall17V2Iso_WP90',
+        'loose_mu_cut': 'Muon_pt>15 && Muon_pfRelIso04_all<0.25 && Muon_tightId',
         'jet_count': 'Sum$(Jet_pt>15 && abs(Jet_eta)<2.4 && (Jet_jetId & 4))',
-        'fatjet_count': 'Sum$(FatJet_pt>150 && abs(FatJet_eta)<2.4)', #&& (FatJet_jetId & 2) && FatJet_msoftdrop>30)',
+        'fatjet_count': 'Sum$(FatJet_pt>150 && abs(FatJet_eta)<2.4)' ,# && (FatJet_jetId & 2) && FatJet_msoftdrop>30)',
     }
     basesels ={
         '1L': '(Sum$({ele_cut} && {tight_ele_cut}) + Sum$({mu_cut} && {tight_mu_cut})) >= 1 && '
               '{jet_count} >= 3 && {fatjet_count} >= 1',
+        '1L-Tight': '(Sum$({loose_ele_cut})+ Sum$({loose_mu_cut})) == 1 && '
+              '(Sum$({ele_cut} && {tight_ele_cut}) + Sum$({mu_cut} && {tight_mu_cut})) >= 1 && '
+              '{jet_count} >= 3 && {fatjet_count} >= 1',
     }
-    cut = basesels['1L'].format(**cut_dict)
+    cut = basesels[choose].format(**cut_dict)
     return cut
 golden_json = {
     '2015': 'Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt',
@@ -31,7 +37,7 @@ def _process(args):
     cmd = ['nano_postproc.py'] 
 
 def main(args):
-    with open('quickCut.json') as fp:
+    with open(args.metadata, 'r') as fp:
         try:
             md = json.load(fp)
         except json.JSONDecodeError as e:
@@ -96,19 +102,24 @@ def main(args):
             print(f"[ERROR] Failed to process file {input_file}!")
             continue
     # hadd files
-    final_output = os.path.join(output_data_dir if args.type == 'Data' else output_mc_dir, f"processed_{year}_{args.type}.root")
+    final_output = os.path.join(output_data_dir if args.type == 'Data' else output_mc_dir, f"processed_{year}_{args.type}_{args.choose_cut}.root")
     hadd_cmd = f"haddnano.py  {final_output} {os.path.join(output_data_dir if args.type == 'Data' else output_mc_dir, '*.root')}"
     print(f"[INFO] Merging files into {final_output}")
     try:        
         subprocess.run(hadd_cmd, shell=True, check=True)
         print(f"[INFO] Merging completed successfully.")
+        # remove all Skim files
+        for f in os.listdir(output_data_dir if args.type == 'Data' else output_mc_dir):
+            if f.endswith('Skim.root'):
+                os.remove(os.path.join(output_data_dir if args.type == 'Data' else output_mc_dir, f))
+                print(f"[INFO] Removed intermediate file: {f}")
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] Merging failed: {e}")
     print(f"[INFO] Processing completed. Output files are in {output_dir}")
 
 def create_metadata(args):
         metadata = {
-            'cut' : _base_cut(),
+            'cut' : _base_cut(args.choose_cut),
             'branchsel_in': 'keep_and_drop_input.txt',
             'branchsel_out': 'keep_and_drop_output.txt',
             'compression': 'LZMA:9',
@@ -116,7 +127,7 @@ def create_metadata(args):
             'type': args.type,
         }
         # save metadata to JSON file
-        metadata_path = "quickCut.json"
+        metadata_path = args.metadata
         try:
             with open(metadata_path, 'w') as fp:
                 json.dump(metadata, fp, indent=4)
@@ -134,7 +145,9 @@ def get_arg_parser():
     parser.add_argument('--year', '-y', required=True, choices=['2015', '2016', '2017', '2018'], help='Data taking year')
     parser.add_argument('--random-choice', '-r', type=int, default=-1, help='Randomly select N files from input')   
     parser.add_argument('--type', '-t', choices=['Data', 'MC'], required=True, help='Type of input files')
-    parser.add_argument('--create-metadata', '-c', action='store_true', help='Create metadata JSON file for processed files')
+    parser.add_argument('--create-metadata', '--create', action='store_true', help='Create metadata JSON file for processed files')
+    parser.add_argument('--metadata', '-m', required=True, help='Path to metadata JSON file')
+    parser.add_argument('--choose-cut', '-c', choices=['1L', '1L-Tight'], default='1L', help='Choose cut configuration')
     args= parser.parse_args()
     return args
 
