@@ -12,7 +12,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // 打开输出文件 status
     std::ofstream status("status.txt");
     if (!status.is_open()) {
         std::cerr << "Cannot open output file: status\n";
